@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamer Pack Editor</title>
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🦊 Streamer Pack</div>
+    <input id="pack-name" class="pack-name" title="Nome do pack">
+    <div class="group">
+      <button data-action="new">Novo pack</button>
+      <button data-action="open">Abrir</button>
+      <button data-action="save">Salvar</button>
+      <button data-action="import">Importar .json</button>
+      <button data-action="download-project">Baixar .json</button>
+    </div>
+    <div class="group">
+      <button data-action="undo" title="Ctrl+Z">↶</button>
+      <button data-action="redo" title="Ctrl+Shift+Z">↷</button>
+    </div>
+    <div class="group">
+      <button data-action="cartoon" class="accent">✨ Cartoon da foto</button>
+      <button data-action="export-png">PNG transparente</button>
+      <button data-action="export-zip">Pack .zip</button>
+      <button data-action="export-video" class="accent">🎬 Vídeo</button>
+    </div>
+    <div id="server-status" class="server-status">ComfyUI: …</div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar left">
+      <section>
+        <h3>Telas do pack <button data-action="add-page" class="mini">+</button></h3>
+        <div id="pages" class="pages"></div>
+      </section>
+      <section>
+        <h3>Adicionar elemento</h3>
+        <div class="add-grid">
+          <button data-add="text">T Texto</button>
+          <button data-add="rect">▭ Retângulo</button>
+          <button data-add="ellipse">◯ Elipse</button>
+          <button data-add="polygon">★ Polígono</button>
+          <button data-add="frame">▢ Moldura cam</button>
+          <button data-add="particles">✦ Partículas</button>
+          <button data-add="image">🖼 Imagem</button>
+        </div>
+      </section>
+      <section class="grow">
+        <h3>Camadas</h3>
+        <div id="layers" class="layers"></div>
+      </section>
+    </aside>
+
+    <section class="center">
+      <div id="stage-wrap" class="stage-wrap">
+        <canvas id="stage"></canvas>
+      </div>
+      <div class="timeline">
+        <button id="play" title="Reproduzir animação (Espaço)">▶</button>
+        <input id="scrub" type="range" min="0" max="1000" value="0">
+        <span id="time" class="time">estático</span>
+        <label>duração <input id="duration" type="number" min="0.5" max="60" step="0.5"> s</label>
+        <label>fps <select id="fps"><option>24</option><option>30</option><option>60</option></select></label>
+        <span class="spacer"></span>
+        <button data-action="zoom-out">−</button>
+        <span id="zoom-label" class="time">100%</span>
+        <button data-action="zoom-in">+</button>
+        <button data-action="zoom-fit">Ajustar</button>
+      </div>
+    </section>
+
+    <aside class="sidebar right">
+      <div class="tabs">
+        <button data-tab="props" class="active">Propriedades</button>
+        <button data-tab="theme">Tema</button>
+      </div>
+      <div id="props" class="panel"></div>
+      <div id="theme" class="panel hidden"></div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <dialog id="dialog"><form method="dialog" id="dialog-body"></form></dialog>
+  <input id="file-input" type="file" hidden>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
