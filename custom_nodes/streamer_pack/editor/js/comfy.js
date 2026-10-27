@@ -119,7 +119,7 @@ export const CARTOON_NEGATIVE = "photo, photorealistic, realistic skin, blurry, 
 
 // Photo → cartoon. "ai" runs img2img with a checkpoint, the ink filter
 // (StreamerCartoonize) can run alone or on top, and an optional background
-// removal model cuts the subject out with transparency.
+// removal model cuts the subject out first so the ink outlines the silhouette.
 export function cartoonPrompt(o) {
   const p = { 1: { class_type: "LoadImage", inputs: { image: o.image } } };
   let image = ["1", 0];
@@ -139,16 +139,19 @@ export function cartoonPrompt(o) {
     p[8] = { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 2] } };
     image = ["8", 0];
   }
-  if (o.ink) {
-    p[9] = { class_type: "StreamerCartoonize", inputs: { image, ...o.inkOptions } };
-    image = ["9", 0];
-  }
   if (o.bgModel) {
     p[10] = { class_type: "LoadBackgroundRemovalModel", inputs: { bg_removal_name: o.bgModel } };
     p[11] = { class_type: "RemoveBackground", inputs: { bg_removal_model: ["10", 0], image } };
     p[12] = { class_type: "InvertMask", inputs: { mask: ["11", 0] } };
     p[13] = { class_type: "JoinImageWithAlpha", inputs: { image, alpha: ["12", 0] } };
-    image = ["13", 0];
+  } else {
+    // Keep the transparency of an already cut out photo.
+    p[13] = { class_type: "JoinImageWithAlpha", inputs: { image, alpha: ["1", 1] } };
+  }
+  image = ["13", 0];
+  if (o.ink) {
+    p[9] = { class_type: "StreamerCartoonize", inputs: { image, ...o.inkOptions } };
+    image = ["9", 0];
   }
   p[20] = { class_type: "SaveImage", inputs: { images: image, filename_prefix: "streamer_pack/cartoon" } };
   return p;

@@ -10,7 +10,7 @@ const TYPE_DEFAULTS = {
     name: "Moldura de webcam", fill: { type: "linear", angle: 0, stops: [[0, "@primary"], [1, "@secondary"]] },
     stroke: "@light", strokeWidth: 0, thickness: 12, radius: 24, frameStyle: "full", cornerLength: 80, innerGap: 8, accent: "@light",
   },
-  image: { name: "Imagem", asset: null, fit: "contain", radius: 0, stroke: "@light", strokeWidth: 0 },
+  image: { name: "Imagem", asset: null, fit: "contain", radius: 0, stroke: "@light", strokeWidth: 0, gradientMap: null },
   text: {
     name: "Texto", text: "Texto", fill: "@text", stroke: "@dark", strokeWidth: 0, fontFamily: "@font", fontSize: 64,
     fontWeight: "800", italic: false, uppercase: false, align: "center", letterSpacing: 0, lineHeight: 1.15, wrap: false,

@@ -323,8 +323,8 @@ export async function cartoonDialog() {
         seed: +$("#ct-seed").value,
         ink: $("#ct-ink").checked,
         inkOptions: $("#ct-mode").value === "ai"
-          ? { smoothing: 1, color_levels: 16, saturation: 1.1, line_strength: 0.6, line_thickness: 1, line_threshold: 0.04 }
-          : { smoothing: 5, color_levels: 8, saturation: 1.3, line_strength: 0.9, line_thickness: 2, line_threshold: 0.03 },
+          ? { smoothing: 1, color_levels: 12, saturation: 1.1, line_strength: 0.6, line_thickness: 1, line_threshold: 0.015 }
+          : { smoothing: 4, color_levels: 6, saturation: 1.2, line_strength: 0.9, line_thickness: 1, line_threshold: 0.01 },
         bgModel: $("#ct-bg").value,
       });
       status.textContent = "Gerando no ComfyUI…";

@@ -5,6 +5,7 @@
 export const THEME_KEYS = ["primary", "secondary", "accent", "text", "dark", "light"];
 
 const images = new Map();
+const mapped = new Map();
 
 export function getImage(doc, assetId, onload) {
   const src = doc.assets[assetId];
@@ -199,6 +200,43 @@ function drawFrame(ctx, layer, env, st) {
   }
 }
 
+// Recolors an image by brightness along the gradient stops (a "gradient map").
+function gradientMapped(img, layer, theme) {
+  const map = layer.gradientMap;
+  const stops = map.stops.map(([pos, c]) => [pos, resolveColor(c, theme)]);
+  const key = `${layer.asset}|${JSON.stringify(stops)}|${map.mix}`;
+  let out = mapped.get(key);
+  if (out) return out;
+
+  const lutCanvas = document.createElement("canvas");
+  lutCanvas.width = 256;
+  lutCanvas.height = 1;
+  const lc = lutCanvas.getContext("2d");
+  const g = lc.createLinearGradient(0, 0, 256, 0);
+  for (const [pos, c] of stops) g.addColorStop(Math.min(1, Math.max(0, pos)), c);
+  lc.fillStyle = g;
+  lc.fillRect(0, 0, 256, 1);
+  const lut = lc.getImageData(0, 0, 256, 1).data;
+
+  out = document.createElement("canvas");
+  out.width = img.naturalWidth;
+  out.height = img.naturalHeight;
+  const oc = out.getContext("2d");
+  oc.drawImage(img, 0, 0);
+  const data = oc.getImageData(0, 0, out.width, out.height);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const j = Math.round(px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) * 4;
+    px[i] += (lut[j] - px[i]) * map.mix;
+    px[i + 1] += (lut[j + 1] - px[i + 1]) * map.mix;
+    px[i + 2] += (lut[j + 2] - px[i + 2]) * map.mix;
+  }
+  oc.putImageData(data, 0, 0);
+  if (mapped.size >= 8) mapped.delete(mapped.keys().next().value);
+  mapped.set(key, out);
+  return out;
+}
+
 function drawImageLayer(ctx, layer, env) {
   const { w, h } = layer;
   const img = getImage(env.doc, layer.asset, env.onImageLoad);
@@ -209,6 +247,7 @@ function drawImageLayer(ctx, layer, env) {
     ctx.fill();
     return;
   }
+  const src = layer.gradientMap ? gradientMapped(img, layer, env.theme) : img;
   let dw = w, dh = h;
   const ir = img.naturalWidth / img.naturalHeight;
   if (layer.fit === "cover") (w / h > ir) ? (dh = w / ir) : (dw = h * ir);
@@ -221,10 +260,10 @@ function drawImageLayer(ctx, layer, env) {
     }
     ctx.save();
     ctx.clip();
-    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    ctx.drawImage(src, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
   } else {
-    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    ctx.drawImage(src, -dw / 2, -dh / 2, dw, dh);
   }
   if (layer.strokeWidth > 0) {
     ctx.shadowColor = "transparent";

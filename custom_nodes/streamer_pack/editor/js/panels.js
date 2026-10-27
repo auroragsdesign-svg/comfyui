@@ -123,19 +123,40 @@ function paint(obj, key, allowNone) {
       return;
     }
     if (p.type === "linear") box.append(row("Ângulo", num(p, "angle", { step: 5 })));
-    p.stops.forEach((stop, i) => {
-      const del = h("button", { type: "button", className: "mini", textContent: "×", title: "Remover parada", disabled: p.stops.length <= 2 });
-      del.onclick = () => { p.stops.splice(i, 1); build(); changed(); };
-      const pos = num(stop, 0, { min: 0, max: 1, step: 0.05 });
-      pos.style.maxWidth = "56px";
-      box.append(h("div", { className: "row" }, pos, color(stop, 1), del));
-    });
-    const add = h("button", { type: "button", textContent: "+ cor" });
-    add.onclick = () => { p.stops.push([1, "@accent"]); build(); changed(); };
-    box.append(add);
+    box.append(...stopRows(p.stops, build));
   };
   build();
   return [row("Tipo", kind), box];
+}
+
+function stopRows(stops, rebuild) {
+  const rows = stops.map((stop, i) => {
+    const del = h("button", { type: "button", className: "mini", textContent: "×", title: "Remover parada", disabled: stops.length <= 2 });
+    del.onclick = () => { stops.splice(i, 1); rebuild(); changed(); };
+    const pos = num(stop, 0, { min: 0, max: 1, step: 0.05 });
+    pos.style.maxWidth = "56px";
+    return h("div", { className: "row" }, pos, color(stop, 1), del);
+  });
+  const add = h("button", { type: "button", textContent: "+ cor" });
+  add.onclick = () => { stops.push([1, "@accent"]); rebuild(); changed(); };
+  return [...rows, add];
+}
+
+// Gradient map: recolors the image by brightness, darkest to brightest.
+function gradientMap(l) {
+  const box = h("div", { className: "stops" });
+  const build = () => {
+    const toggle = h("input", { type: "checkbox", checked: !!l.gradientMap });
+    toggle.onchange = () => {
+      l.gradientMap = toggle.checked ? { mix: 1, stops: [[0, "@dark"], [0.5, "@primary"], [0.85, "@secondary"], [1, "@light"]] } : null;
+      build();
+      changed();
+    };
+    box.replaceChildren(row("Degradê", toggle));
+    if (l.gradientMap) box.append(row("Intensidade", ...range(l.gradientMap, "mix", 0, 1, 0.01)), ...stopRows(l.gradientMap.stops, build));
+  };
+  build();
+  return box;
 }
 
 function fieldset(title, ...children) {
@@ -324,7 +345,7 @@ function layerProps(l) {
     cartoon.onclick = () => document.dispatchEvent(new Event("cartoon"));
     out.push(fieldset("Imagem", h("div", { className: "btn-row" }, replace, natural, cartoon),
       row("Ajuste", select(l, "fit", { contain: "Conter", cover: "Cobrir", stretch: "Esticar" })),
-      row("Cantos", num(l, "radius", { min: 0 }))));
+      row("Cantos", num(l, "radius", { min: 0 })), gradientMap(l)));
   }
   if (l.type === "frame") {
     out.push(fieldset("Moldura", row("Estilo", select(l, "frameStyle", { full: "Completa", double: "Dupla", corners: "Só cantos" }, true)),

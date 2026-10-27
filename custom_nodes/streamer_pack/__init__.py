@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from aiohttp import web
 from PIL import Image
+from torchvision.transforms.functional import gaussian_blur
 from typing_extensions import override
 
 import folder_paths
@@ -13,6 +14,7 @@ from server import PromptServer
 
 WEB_DIRECTORY = "./web"
 EDITOR_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "editor")
+LUMA_WEIGHTS = (0.299, 0.587, 0.114)
 
 
 def bilateral_filter(image, radius, sigma_space, sigma_color):
@@ -29,6 +31,11 @@ def bilateral_filter(image, radius, sigma_space, sigma_color):
     return num / den
 
 
+def blur(image, sigma):
+    k = int(sigma * 3) * 2 + 1
+    return gaussian_blur(image, [k, k], [sigma, sigma])
+
+
 class StreamerCartoonize(io.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -41,11 +48,11 @@ class StreamerCartoonize(io.ComfyNode):
             inputs=[
                 io.Image.Input("image"),
                 io.Int.Input("smoothing", default=4, min=0, max=16, tooltip="Bilateral filter passes. More passes give flatter color areas."),
-                io.Int.Input("color_levels", default=8, min=2, max=64, tooltip="Number of color steps per channel."),
-                io.Float.Input("saturation", default=1.25, min=0.0, max=3.0, step=0.05),
-                io.Float.Input("line_strength", default=0.85, min=0.0, max=1.0, step=0.05),
-                io.Int.Input("line_thickness", default=2, min=1, max=8),
-                io.Float.Input("line_threshold", default=0.03, min=0.0, max=0.5, step=0.005, tooltip="Lower values draw more lines."),
+                io.Int.Input("color_levels", default=6, min=2, max=64, tooltip="Number of shading bands."),
+                io.Float.Input("saturation", default=1.2, min=0.0, max=3.0, step=0.05),
+                io.Float.Input("line_strength", default=0.9, min=0.0, max=1.0, step=0.05),
+                io.Float.Input("line_thickness", default=1.0, min=0.5, max=8.0, step=0.1),
+                io.Float.Input("line_threshold", default=0.01, min=0.0, max=0.2, step=0.001, tooltip="Lower values draw more lines."),
             ],
             outputs=[io.Image.Output()],
         )
@@ -53,20 +60,29 @@ class StreamerCartoonize(io.ComfyNode):
     @classmethod
     def execute(cls, image, smoothing, color_levels, saturation, line_strength, line_thickness, line_threshold) -> io.NodeOutput:
         rgb = image[..., :3].movedim(-1, 1)
+        h, w = rgb.shape[-2:]
+        weights = torch.tensor(LUMA_WEIGHTS, device=rgb.device, dtype=rgb.dtype).view(1, 3, 1, 1)
 
-        gray = (rgb * torch.tensor([0.299, 0.587, 0.114], device=rgb.device, dtype=rgb.dtype).view(1, 3, 1, 1)).sum(1, keepdim=True)
-        local_mean = F.avg_pool2d(gray, 7, stride=1, padding=3, count_include_pad=False)
-        edges = ((local_mean - gray - line_threshold) * 25.0).clamp(0.0, 1.0)
-        edges = F.max_pool2d(edges, line_thickness * 2 - 1, stride=1, padding=line_thickness - 1)
-
-        flat = rgb
+        # Smooth at a bounded resolution so the filter flattens regions instead of just skin and fabric texture.
+        scale = min(1.0, 640 / max(h, w))
+        flat = F.interpolate(rgb, scale_factor=scale, mode="area") if scale < 1.0 else rgb
         for _ in range(smoothing):
-            flat = bilateral_filter(flat, 2, 3.0, 0.1)
+            flat = bilateral_filter(flat, 3, 3.0, 0.08)
+        if scale < 1.0:
+            flat = F.interpolate(flat, size=(h, w), mode="bilinear")
 
-        luma = (flat * torch.tensor([0.299, 0.587, 0.114], device=rgb.device, dtype=rgb.dtype).view(1, 3, 1, 1)).sum(1, keepdim=True)
+        # Ink lines from a difference of gaussians on the smoothed luma.
+        luma = (flat * weights).sum(1, keepdim=True)
+        sigma = line_thickness * max(1.0, max(h, w) / 1024)
+        edges = ((blur(luma, sigma * 1.6) - blur(luma, sigma) - line_threshold) * 40.0).clamp(0.0, 1.0)
+        if image.shape[-1] == 4:
+            alpha = image[..., 3:].movedim(-1, 1)
+            edges = torch.maximum(edges, ((blur(alpha, sigma * 2) - alpha) * 6.0).abs().clamp(0.0, 1.0))
+
+        # Cel shading: quantize brightness into bands while keeping each region's hue.
         flat = torch.lerp(luma, flat, saturation).clamp(0.0, 1.0)
-        flat = torch.round(flat * (color_levels - 1)) / (color_levels - 1)
-        out = flat * (1.0 - edges * line_strength)
+        bands = torch.round(luma * (color_levels - 1)) / (color_levels - 1)
+        out = (flat * (bands + 0.05) / (luma + 0.05)).clamp(0.0, 1.0) * (1.0 - edges * line_strength)
 
         return io.NodeOutput(torch.cat((out.movedim(1, -1), image[..., 3:]), dim=-1))
 
